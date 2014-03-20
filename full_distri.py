@@ -82,15 +82,22 @@ def rebuild_ring(nodes, partition_power, replicas, old_part2node, old_nodes):
     node_ids = [node_id['id'] for node_id in nodes.itervalues()]
     old_node_ids = [node_id['id'] for node_id in old_nodes.itervalues()]
     if len(node_ids) > len(old_node_ids):
+        ##this means we add a new node
         for i in old_node_ids:
             diff =  old_part2node.count(i) - part2node.count(i)
-            print diff
-            print "try to replace randomly"
             random_replace_id(old_part2node, i, node_ids[-1], diff)
-
+    elif len(node_ids) < len(old_node_ids):
+        for i in node_ids:
+            diff = part2node.count(i) - old_part2node.count(i)
+            lost_id = [j for j in old_node_ids if j not in node_ids]
+            random_replace_id(old_part2node, lost_id[0], i, diff)
+    else:
+        "they are equal"
+        print str(node_ids)
+        print str(old_node_ids)
     ring = Ring(nodes, old_part2node, replicas)
 #    print '%.02fs to build ring' % (time() - begin)
-    return ring
+    return (ring, old_part2node)
 
 
 def random_replace_id(data_list, id_1, id_2, repeat_time=1):
@@ -179,9 +186,9 @@ def test_ring(ring):
     print 'the distributed size per node: %s' % str(node_sizes)
 #    for data in object_list:
 #        for node in ring.get_nodes(data['path']):
-#        compare = ring.get_nodes(data['path'])
-#        if compare[0]['id'] == compare[1]['id']:
-#            print compare
+#             compare = ring.get_nodes(data['path'])
+#             if compare[0]['id'] != compare[1]['id']:
+#                 print compare
     return location
 
 if __name__ == '__main__':
@@ -211,7 +218,7 @@ if __name__ == '__main__':
             nodes2[node_id] = {'id': node_id, 'zone': zone,
                               'weight': 1.0 + (node_id % 2)}
             zone += 1
-    ring2 = rebuild_ring(nodes2, PARTITION_POWER, REPLICAS, old_part2node, nodes)
+    (ring2, old_part2node2) = rebuild_ring(nodes2, PARTITION_POWER, REPLICAS, old_part2node, nodes)
     location2= test_ring(ring2)
 
     move_number = 0
@@ -221,5 +228,25 @@ if __name__ == '__main__':
         for j in lo2:
             if j not in lo1:
                 move_number += 1
-    print move_number
+    print "The number of moved files: %d" % move_number
+
+
+
+
+    print 'Now we remove node 3 and rebuilt the ring'
+    NODE_COUNT = 4
+
+    nodes3 = nodes2.copy()
+    del nodes3[3]
+    (ring3,old_part2node3) = rebuild_ring(nodes3, PARTITION_POWER, REPLICAS, old_part2node2, nodes2)
+    location3= test_ring(ring3)
+
+    move_number = 0
+    for data in object_list:
+        lo2 = location2.get(data['path'])
+        lo3 = location3.get(data['path'])
+        for j in lo3:
+            if j not in lo2:
+                move_number += 1
+    print "The number of moved files: %d" % move_number
 
